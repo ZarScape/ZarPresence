@@ -1,0 +1,64 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run build:extension && npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:5173",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "ZarPresence",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      },
+      "window": {
+        "all": true
+      },
+      "notification": {
+        "all": true
+      }
+    },
+    "systemTray": {
+      "iconPath": "../src/extension/assets/logo-transparent.png"
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.zarpresence.app",
+      "icon": [
+        "../src/extension/assets/logo-transparent.png",
+        "../src/extension/assets/logo.png",
+        "../src/extension/assets/logo-icon.ico"
+      ],
+      "windows": {
+        "nsis": {
+          "displayLanguageSelector": true,
+          "template": "../templates-installer.nsi",
+          "license": "../LICENSE",
+          "installerIcon": "nsis/logo-icon.ico",
+          "headerImage": "nsis/header.bmp",
+          "sidebarImage": "nsis/sidebar.bmp"
+        }
+      }
+    },
+    "windows": [
+      {
+        "label": "main",
+        "fullscreen": false,
+        "height": 700,
+        "resizable": true,
+        "title": "ZarPresence",
+        "width": 1000,
+        "minWidth": 800,
+        "minHeight": 500,
+        "decorations": false,
+        "transparent": true
+      }
+    ]
+  }
+}
