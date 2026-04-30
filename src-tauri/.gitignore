@@ -1,1 +1,7 @@
+# Rust/Cargo
 /target
+Cargo.lock
+
+# Tauri
+gen/
+binaries/

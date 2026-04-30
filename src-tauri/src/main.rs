@@ -111,6 +111,64 @@ fn set_autostart(enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn check_for_updates() -> Result<Option<String>, String> {
+    let current_version = env!("CARGO_PKG_VERSION");
+    let client = reqwest::Client::builder()
+        .user_agent("ZarPresence")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let res = client
+        .get("https://api.github.com/repos/ZarScape/ZarPresence/releases/latest")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let release: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    let latest_version = release["tag_name"].as_str().unwrap_or("").trim_start_matches('v');
+
+    if latest_version != current_version && !latest_version.is_empty() {
+        Ok(Some(latest_version.to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
+async fn install_update(version: String) -> Result<(), String> {
+    let url = format!(
+        "https://github.com/ZarScape/ZarPresence/releases/download/{}/ZarPresence_{}_x64-setup.exe",
+        version, version
+    );
+
+    let client = reqwest::Client::new();
+    let response = client.get(url).send().await.map_err(|e| e.to_string())?;
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+
+    let temp_dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let file_path = temp_dir.path().join("ZarPresence_Update.exe");
+    std::fs::write(&file_path, bytes).map_err(|e| e.to_string())?;
+
+    // Execute the installer silently
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new(file_path)
+            .arg("/S") // NSIS Silent flag
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        
+        // Exit the current app so the installer can replace the files
+        std::process::exit(0);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        return Err("Updates are only supported on Windows currently.".to_string());
+    }
+}
+
 fn main() {
     let discord_state = Arc::new(Mutex::new(DiscordState::new()));
     let ws_discord_state = discord_state.clone();
@@ -130,6 +188,12 @@ fn main() {
     let system_tray = SystemTray::new().with_menu(tray_menu);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(discord_state.clone())
         .system_tray(system_tray)
         .on_system_tray_event(|app, event| {
@@ -216,7 +280,9 @@ fn main() {
             reconnect_rpc,
             set_privacy_mode,
             is_autostart_enabled,
-            set_autostart
+            set_autostart,
+            check_for_updates,
+            install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

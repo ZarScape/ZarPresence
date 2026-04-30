@@ -43,7 +43,38 @@ function App() {
     localStorage.setItem('zar-theme', theme);
   }, [theme]);
 
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'latest' | 'error' | 'installing'>('idle');
+  const [newVersion, setNewVersion] = useState<string | null>(null);
+
+  const handleCheckUpdate = async (silent = false) => {
+    if (!silent) setUpdateStatus('checking');
+    try {
+      const version = await invoke('check_for_updates');
+      if (version) {
+        setNewVersion(version as string);
+        setUpdateStatus('available');
+      } else {
+        if (!silent) setUpdateStatus('latest');
+      }
+    } catch (error) {
+      console.error('Update check failed:', error);
+      if (!silent) setUpdateStatus('error');
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!newVersion) return;
+    setUpdateStatus('installing');
+    try {
+      await invoke('install_update', { version: newVersion });
+    } catch (error) {
+      console.error('Update failed:', error);
+      setUpdateStatus('error');
+    }
+  };
+
   useEffect(() => {
+    handleCheckUpdate(true);
     invoke('is_autostart_enabled').then(enabled => setAutostart(enabled as boolean));
   }, []);
 
@@ -376,6 +407,43 @@ function App() {
                         <input type="checkbox" className="sr-only peer" checked={autostart} onChange={handleToggleAutostart} />
                         <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all shadow-md ${isDark ? 'bg-slate-800 after:border-slate-300 peer-checked:bg-blue-600' : 'bg-slate-200 after:border-slate-100 peer-checked:bg-blue-500'}`}></div>
                       </label>
+                    </div>
+                  </div>
+              </div>
+
+              <div className={`rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-10 border shadow-2xl transition-all duration-500 ${isDark ? 'bg-white/5 border-white/10 shadow-black/40' : 'bg-white border-slate-200 shadow-slate-200/50'}`}>
+                 <h2 className={`text-xl sm:text-2xl font-bold mb-6 ${isDark ? 'text-white' : 'text-slate-800'}`}>App Updates</h2>
+                 <div className="space-y-4">
+                    <div className={`flex items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border transition-colors ${isDark ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
+                       <div className="overflow-hidden pr-2">
+                         <h3 className={`font-black text-sm sm:text-base tracking-tight truncate transition-colors ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>Check for Updates</h3>
+                         <p className={`text-[10px] sm:text-xs font-medium mt-1 opacity-60 truncate ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                           {updateStatus === 'checking' && 'Checking for updates...'}
+                           {updateStatus === 'available' && `New version v${newVersion} available!`}
+                           {updateStatus === 'latest' && 'You are on the latest version.'}
+                           {updateStatus === 'error' && 'Failed to check for updates.'}
+                           {updateStatus === 'installing' && 'Downloading and installing update...'}
+                           {updateStatus === 'idle' && 'Last checked: Just now'}
+                         </p>
+                       </div>
+                       
+                       {(updateStatus === 'available' || updateStatus === 'installing') ? (
+                          <button 
+                            onClick={handleInstallUpdate}
+                            disabled={updateStatus === 'installing'}
+                            className="shrink-0 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-900/20"
+                          >
+                            {updateStatus === 'installing' ? 'INSTALLING...' : 'INSTALL NOW'}
+                          </button>
+                       ) : (
+                          <button 
+                            onClick={() => handleCheckUpdate(false)}
+                            disabled={updateStatus === 'checking'}
+                            className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all ${isDark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-slate-200 text-slate-800 hover:bg-slate-300'}`}
+                          >
+                            {updateStatus === 'checking' ? 'CHECKING...' : 'CHECK NOW'}
+                          </button>
+                       )}
                     </div>
                   </div>
               </div>

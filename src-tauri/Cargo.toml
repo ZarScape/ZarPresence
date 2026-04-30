@@ -13,6 +13,9 @@ tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread", "net"] }
 tokio-tungstenite = "0.21"
 futures-util = "0.3"
 window-vibrancy = "0.4.1"
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+tempfile = "3.8"
+tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 
 [build-dependencies]
 tauri-build = { version = "1.5", features = [] }
