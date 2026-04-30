@@ -66,7 +66,7 @@ function App() {
     if (!newVersion) return;
     setUpdateStatus('installing');
     try {
-      await invoke('install_update', { version: newVersion });
+      await invoke('install_update');
     } catch (error) {
       console.error('Update failed:', error);
       setUpdateStatus('error');

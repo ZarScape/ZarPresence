@@ -137,7 +137,7 @@ async fn check_for_updates() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-async fn install_update(version: String) -> Result<(), String> {
+async fn install_update() -> Result<(), String> {
     let client = reqwest::Client::new();
     
     // Get the download URL from the JSON
@@ -155,14 +155,43 @@ async fn install_update(version: String) -> Result<(), String> {
     let bytes = response.bytes().await.map_err(|e| e.to_string())?;
 
     let temp_dir = tempfile::tempdir().map_err(|e| e.to_string())?;
-    let file_path = temp_dir.path().join("ZarPresence_Update.exe");
-    std::fs::write(&file_path, bytes).map_err(|e| e.to_string())?;
+    let zip_path = temp_dir.path().join("update.zip");
+    std::fs::write(&zip_path, bytes).map_err(|e| e.to_string())?;
+
+    // Unzip the file
+    let file = std::fs::File::open(&zip_path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    
+    let mut exe_path = None;
+
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        let outpath = temp_dir.path().join(file.mangled_name());
+
+        if (&*file.name()).ends_with('/') {
+            std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    std::fs::create_dir_all(&p).map_err(|e| e.to_string())?;
+                }
+            }
+            let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
+            std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+            
+            if outpath.extension().map_or(false, |ext| ext == "exe") {
+                exe_path = Some(outpath.clone());
+            }
+        }
+    }
+
+    let exe_to_run = exe_path.ok_or("No EXE found in update zip")?;
 
     // Execute the installer silently
     #[cfg(target_os = "windows")]
     {
         use std::process::Command;
-        Command::new(file_path)
+        Command::new(exe_to_run)
             .arg("/S") // NSIS Silent flag
             .spawn()
             .map_err(|e| e.to_string())?;
