@@ -1,0 +1,27 @@
+{
+  "version": "1.0.2",
+  "notes": "Transitioned to the high-performance Dynamic Update System and optimized project assets.",
+  "pub_date": "2026-04-30T17:51:28Z",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "https://github.com/ZarScape/ZarPresence/releases/download/1.0.2/ZarPresence_1.0.2_x64-setup.exe"
+    }
+  },
+  "history": [
+    {
+      "version": "1.0.2",
+      "date": "2026-04-30",
+      "notes": "Dynamic update system and asset cleanup."
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-04-30",
+      "notes": "Auto-updater and Single Instance support."
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-04-30",
+      "notes": "Initial Release."
+    }
+  ]
+}

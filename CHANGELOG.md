@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-04-30
+### Added
+- **Dynamic Update System**: High-performance update checking via updates.json.
+- **Repository Optimization**: Removed unused assets and template files.
+
 ## [1.0.1] - 2026-04-30
 ### Added
 - **Auto-Updater**: Application now checks for updates and installs them automatically.

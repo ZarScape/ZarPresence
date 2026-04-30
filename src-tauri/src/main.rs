@@ -119,14 +119,15 @@ async fn check_for_updates() -> Result<Option<String>, String> {
         .build()
         .map_err(|e| e.to_string())?;
 
+    // Fetch your custom updates.json
     let res = client
-        .get("https://api.github.com/repos/ZarScape/ZarPresence/releases/latest")
+        .get("https://raw.githubusercontent.com/ZarScape/ZarPresence/master/updates.json")
         .send()
         .await
         .map_err(|e| e.to_string())?;
 
-    let release: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
-    let latest_version = release["tag_name"].as_str().unwrap_or("").trim_start_matches('v');
+    let updates: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    let latest_version = updates["version"].as_str().unwrap_or("");
 
     if latest_version != current_version && !latest_version.is_empty() {
         Ok(Some(latest_version.to_string()))
@@ -137,12 +138,19 @@ async fn check_for_updates() -> Result<Option<String>, String> {
 
 #[tauri::command]
 async fn install_update(version: String) -> Result<(), String> {
-    let url = format!(
-        "https://github.com/ZarScape/ZarPresence/releases/download/{}/ZarPresence_{}_x64-setup.exe",
-        version, version
-    );
-
     let client = reqwest::Client::new();
+    
+    // Get the download URL from the JSON
+    let res = client
+        .get("https://raw.githubusercontent.com/ZarScape/ZarPresence/master/updates.json")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let updates: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    let url = updates["platforms"]["windows-x86_64"]["url"].as_str()
+        .ok_or("Could not find download URL in updates.json")?;
+
     let response = client.get(url).send().await.map_err(|e| e.to_string())?;
     let bytes = response.bytes().await.map_err(|e| e.to_string())?;
 
