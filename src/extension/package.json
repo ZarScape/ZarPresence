@@ -1,7 +1,7 @@
 {
   "name": "zar-presence-extension",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "ZarScape",
   "description": "Modern Discord Rich Presence, redefined.",
   "type": "module",
