@@ -1,8 +1,11 @@
-/// <reference types="chrome"/>
+import config from '../config/platforms/youtube.json';
+
 // YouTube Content Script for ZarPresence
 let lastUrl = location.href;
 let updateInterval: number | null = null;
 let browsingStartTime = Math.floor(Date.now() / 1000);
+
+const templates = config.display_templates;
 
 function scrapeYouTubeData() {
   const path = window.location.pathname;
@@ -24,23 +27,27 @@ function scrapeYouTubeData() {
     const urlParams = new URLSearchParams(window.location.search);
     const query = urlParams.get('search_query') || "";
     
-    let details = "Exploring YouTube";
+    let details = templates.exploring || "Exploring YouTube";
     let state = "";
 
     if (isSearchPage) {
-        details = "Searching";
-        state = query ? `"${query}"` : "YouTube";
+        details = templates.searching || "Searching";
+        state = query ? (templates.search_state ? templates.search_state.replace('{query}', query) : `"${query}"`) : (templates.search_fallback || "YouTube");
     } else if (isHomePage) {
-        details = "YouTube Home";
+        details = templates.home || "YouTube Home";
         state = "";
     }
+
+    const icons = (templates as any).icons || {};
 
     return {
       ...baseData,
       details,
       state,
       is_browsing: true,
-      timestamp_start: browsingStartTime // Acts as a stopwatch
+      timestamp_start: browsingStartTime, // Acts as a stopwatch
+      small_image_key: icons.exploring || "youtube-icon",
+      small_text: icons.exploring_text || "Exploring"
     };
   }
 
@@ -156,8 +163,9 @@ function scrapeYouTubeData() {
       }
 
       const large_image_key = videoId ? `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg` : undefined;
-      const small_image_key = isShortsPage ? "youtube-shorts-icon" : "youtube-icon";
-      const small_text = isShortsPage ? "YouTube Shorts" : "YouTube";
+      const icons = (templates as any).icons || {};
+      const small_image_key = isShortsPage ? (icons.shorts || "youtube-shorts-icon") : (icons.playing || "play");
+      const small_text = isShortsPage ? (icons.shorts_text || "YouTube Shorts") : (icons.playing_text || "Playing");
 
       return {
         ...baseData,

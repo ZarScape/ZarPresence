@@ -29,7 +29,13 @@ pub struct ActivityPayload {
 
 pub async fn start_server(discord_state: Arc<Mutex<DiscordState>>) {
     let addr = "127.0.0.1:3012";
-    let listener: TcpListener = TcpListener::bind(addr).await.expect("Failed to bind WebSocket server");
+    let listener = match TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Failed to bind WebSocket server: {}. ZarPresence might already be running.", e);
+            return;
+        }
+    };
     println!("WebSocket server listening on {}", addr);
 
     while let Ok((stream, _)) = listener.accept().await {
@@ -50,19 +56,7 @@ pub async fn start_server(discord_state: Arc<Mutex<DiscordState>>) {
                                     }
                                     "ACTIVITY" => {
                                         if let Some(payload) = data.payload {
-                                            // Ensure connected to the right app ID based on platform
-                                            let app_id = match payload.platform_id.as_str() {
-                                                "crunchyroll" => "1498675988844773426",
-                                                _ => "1497547763028856945", // Default/YouTube
-                                            };
-                                            
-                                            if let Err(e) = state.connect(app_id) {
-                                                if !e.to_string().contains("cooldown") {
-                                                    eprintln!("Discord connection error: {}", e);
-                                                }
-                                            } else {
-                                                state.update(&payload);
-                                            }
+                                            state.update(&payload);
                                         }
                                     }
                                     _ => {}

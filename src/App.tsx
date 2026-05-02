@@ -3,8 +3,30 @@ import { invoke } from '@tauri-apps/api/tauri';
 import { getCurrent } from '@tauri-apps/api/window';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/api/notification';
 import { listen } from '@tauri-apps/api/event';
-import { Minus, Square, X, Home, Settings as SettingsIcon, Activity, CheckCircle2, AlertCircle, ShieldCheck, RefreshCw } from 'lucide-react';
-import { DEFAULT_SETTINGS, type PlatformConfig } from './shared-types/index';
+import { Minus, Square, X, Home, Settings as SettingsIcon, Activity, ShieldCheck, RefreshCw } from 'lucide-react';
+
+const platformModules = import.meta.glob('./config/platforms/*.json', { eager: true });
+const platformList = Object.values(platformModules).map((m: any) => m.default);
+
+// Group platforms by category dynamically
+const groupedCategories: any[] = [];
+platformList.forEach((platform: any) => {
+  const catId = platform.category.id;
+  let category = groupedCategories.find(c => c.id === catId);
+  if (!category) {
+    category = {
+      id: catId,
+      name: platform.category.name,
+      platforms: []
+    };
+    groupedCategories.push(category);
+  }
+  category.platforms.push(platform);
+});
+
+const platformConfig = {
+  categories: groupedCategories
+};
 import logo from './extension/assets/logo-transparent.png';
 import './App.css';
 
@@ -12,16 +34,53 @@ const appWindow = getCurrent();
 
 function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'settings'>('home');
-  const [platforms, setPlatforms] = useState<PlatformConfig[]>(DEFAULT_SETTINGS.platforms);
-  const [installStatus, setInstallStatus] = useState<{msg: string, isError: boolean} | null>(null);
-  const [installing, setInstalling] = useState(false);
+  const [categories, setCategories] = useState(() => {
+    const saved = localStorage.getItem('zar-categories');
+    const initial = platformConfig.categories;
+    
+    if (saved) {
+      try {
+        const parsedSaved = JSON.parse(saved);
+        // Merge saved "enabled" states with the latest icons/metadata from JSON
+        return initial.map((cat: any) => {
+          const savedCat = parsedSaved.find((sc: any) => sc.id === cat.id);
+          return {
+            ...cat,
+            platforms: cat.platforms.map((plat: any) => {
+              const savedPlat = savedCat?.platforms.find((sp: any) => sp.id === plat.id);
+              return {
+                ...plat,
+                enabled: savedPlat ? savedPlat.enabled : plat.enabled,
+                features: plat.features.map((feat: any) => {
+                  const savedFeat = savedPlat?.features.find((sf: any) => sf.id === feat.id);
+                  return {
+                    ...feat,
+                    enabled: savedFeat ? savedFeat.enabled : feat.enabled
+                  };
+                })
+              };
+            })
+          };
+        });
+      } catch (e) {
+        return initial;
+      }
+    }
+    return initial;
+  });
   const [reconnecting, setReconnecting] = useState(false);
   const [reconnectCooldown, setReconnectCooldown] = useState(0);
   const [isDiscordConnected, setIsDiscordConnected] = useState(false);
   const [autostart, setAutostart] = useState(false);
+  const [appVersion, setAppVersion] = useState<string>('...');
+  const [minimizeToTray, setMinimizeToTray] = useState(() => {
+    return localStorage.getItem('zar-minimize-to-tray') !== 'false';
+  });
+  
   const [privacyMode, setPrivacyMode] = useState(() => {
     return localStorage.getItem('zar-privacy-mode') === 'true';
   });
+
   
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
     return (localStorage.getItem('zar-theme') as 'system' | 'light' | 'dark') || 'system';
@@ -76,6 +135,11 @@ function App() {
   useEffect(() => {
     handleCheckUpdate(true);
     invoke('is_autostart_enabled').then(enabled => setAutostart(enabled as boolean));
+    
+    // Get real app version
+    import('@tauri-apps/api/app').then(({ getVersion }) => {
+      getVersion().then(setAppVersion);
+    });
   }, []);
 
   const handleToggleAutostart = async () => {
@@ -97,6 +161,15 @@ function App() {
     invoke('set_privacy_mode', { enabled: privacyMode }).catch(console.error);
   }, [privacyMode]);
 
+
+  useEffect(() => {
+    localStorage.setItem('zar-categories', JSON.stringify(categories));
+  }, [categories]);
+
+  useEffect(() => {
+    localStorage.setItem('zar-minimize-to-tray', minimizeToTray.toString());
+  }, [minimizeToTray]);
+
   useEffect(() => {
     const setupListeners = async () => {
       // Discord connection status from Rust
@@ -105,9 +178,6 @@ function App() {
       });
 
       const unlistenNotFound = await listen('discord-not-found', async () => {
-        const audio = new Audio('https://rpg.hamsterrepublic.com/wiki-images/d/db/Suitcase_Open.ogg');
-        audio.volume = 0.5;
-        audio.play().catch(() => {});
 
         let permissionGranted = await isPermissionGranted();
         if (!permissionGranted) {
@@ -135,23 +205,40 @@ function App() {
     };
   }, []);
 
-  const togglePlatform = (id: string) => {
-    setPlatforms(platforms.map(p => 
-      p.id === id ? { ...p, enabled: !p.enabled } : p
-    ));
+  const togglePlatform = (catId: string, platId: string) => {
+    setCategories(categories.map((cat: any) => {
+      if (cat.id !== catId) return cat;
+      return {
+        ...cat,
+        platforms: cat.platforms.map((plat: any) => 
+          plat.id === platId ? { ...plat, enabled: !plat.enabled } : plat
+        )
+      };
+    }));
+  };
+
+  const toggleFeature = (catId: string, platId: string, featId: string) => {
+    setCategories(categories.map((cat: any) => {
+      if (cat.id !== catId) return cat;
+      return {
+        ...cat,
+        platforms: cat.platforms.map((plat: any) => {
+          if (plat.id !== platId) return plat;
+          return {
+            ...plat,
+            features: plat.features.map((feat: any) => 
+              feat.id === featId ? { ...feat, enabled: !feat.enabled } : feat
+            )
+          };
+        })
+      };
+    }));
   };
 
   const handleInstallExtension = async () => {
-    setInstalling(true);
-    setInstallStatus(null);
-    try {
-      const response: string = await invoke('force_install_extension');
-      setInstallStatus({ msg: response, isError: false });
-    } catch (error: any) {
-      setInstallStatus({ msg: error.toString(), isError: true });
-    } finally {
-      setInstalling(false);
-    }
+    import('@tauri-apps/api/shell').then(({ open }) => {
+      open('https://chromewebstore.google.com/detail/ZarPresence/cjajceiejgjpmkbcokjhfcpemaoiakjh');
+    });
   };
 
   useEffect(() => {
@@ -221,7 +308,16 @@ function App() {
           <button onClick={() => appWindow.toggleMaximize()} className={`p-1.5 rounded-md transition-colors ${isDark ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-black/5 text-slate-600 hover:text-black'}`}>
             <Square size={13} />
           </button>
-          <button onClick={() => appWindow.close()} className="p-1.5 hover:bg-red-500 rounded-md transition-colors text-slate-400 hover:text-white group">
+          <button 
+            onClick={() => {
+              if (minimizeToTray) {
+                appWindow.hide();
+              } else {
+                appWindow.close();
+              }
+            }} 
+            className="p-1.5 hover:bg-red-500 rounded-md transition-colors text-slate-400 hover:text-white group"
+          >
             <X size={15} className="group-hover:text-white" />
           </button>
           </div>
@@ -286,33 +382,89 @@ function App() {
                   <span className="truncate">Active Platforms</span>
                 </h2>
                 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-                  {platforms.map(platform => (
-                    <div key={platform.id} className={`group relative flex items-center justify-between p-5 sm:p-6 rounded-2xl sm:rounded-3xl border transition-all duration-300 ${isDark ? 'bg-black/40 border-white/5 hover:border-white/20' : 'bg-slate-50 border-slate-200 hover:border-blue-300 shadow-sm'}`}>
-                      <div className="flex items-center gap-4 sm:gap-5 overflow-hidden">
-                        <div className={`w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-xl transition-all flex items-center justify-center shadow-inner ${platform.enabled ? (platform.id === 'youtube' ? 'bg-red-500/10 text-red-500' : 'bg-orange-500/10 text-orange-500') : (isDark ? 'bg-white/5 text-slate-600' : 'bg-white text-slate-300')}`}>
-                          {platform.id === 'youtube' ? (
-                            <svg className="w-7 h-7 sm:w-8 sm:h-8" viewBox="0 0 24 24" fill="currentColor">
-                              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.377.505 9.377.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-                            </svg>
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 sm:w-8 sm:h-8" viewBox="0 0 48 48">
-                              <path fill="currentColor" d="M9,26.5C9,16.835,16.835,9,26.5,9c9.243,0,16.793,7.171,17.437,16.25 C43.963,24.834,44,24.422,44,24c0-11.046-8.954-20-20-20S4,12.954,4,24c0,11.046,8.954,20,20,20c0.422,0,0.834-0.037,1.25-0.063 C16.171,43.293,9,35.743,9,26.5z"></path>
-                              <path fill="currentColor" d="M36.5,28c-3.59,0-6.5-2.91-6.5-6.5c0-2.637,1.573-4.902,3.829-5.921 C31.941,14.574,29.788,14,27.5,14C20.044,14,14,20.044,14,27.5C14,34.956,20.044,41,27.5,41S41,34.956,41,27.5 c0-0.425-0.025-0.844-0.064-1.259C39.774,27.329,38.217,28,36.5,28z"></path>
-                            </svg>
-                          )}
-                        </div>
-                        <div className="flex flex-col overflow-hidden min-w-0">
-                          <h3 className={`font-bold text-lg sm:text-xl truncate transition-colors ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{platform.name}</h3>
-                          <span className={`text-[9px] sm:text-[10px] uppercase font-black tracking-[0.2em] mt-0.5 ${platform.enabled ? (isDark ? 'text-blue-400' : 'text-blue-600') : (isDark ? 'text-slate-600' : 'text-slate-400')}`}>
-                            {platform.enabled ? 'ACTIVE' : 'DISABLED'}
-                          </span>
-                        </div>
+                <div className="space-y-12">
+                  {categories.map((category: any) => (
+                    <div key={category.id} className="space-y-6">
+                      <div className="flex items-center gap-4 px-2">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+                        <h3 className={`text-[10px] font-black tracking-[0.3em] uppercase opacity-40 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                          {category.name}
+                        </h3>
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer scale-100 sm:scale-110 shrink-0 ml-2">
-                        <input type="checkbox" className="sr-only peer" checked={platform.enabled} onChange={() => togglePlatform(platform.id)} />
-                        <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all shadow-md ${isDark ? 'bg-slate-800 after:border-slate-300 peer-checked:bg-blue-600' : 'bg-slate-200 after:border-slate-100 peer-checked:bg-blue-500'}`}></div>
-                      </label>
+
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        {category.platforms.map((platform: any) => (
+                            <div key={platform.id} className={`group relative flex flex-col rounded-[2.5rem] border transition-all duration-500 overflow-hidden ${isDark ? 'bg-black/40 border-white/5 hover:border-white/10' : 'bg-slate-50 border-slate-200 hover:border-blue-200 shadow-sm'}`}>
+                              <div className="flex items-center justify-between p-5 sm:p-6">
+                                <div className="flex items-center gap-4 sm:gap-5 overflow-hidden">
+                                  <div 
+                                    className="w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-2xl transition-all duration-500 flex items-center justify-center shadow-inner"
+                                    style={{ 
+                                      backgroundColor: platform.enabled ? `${platform.color}15` : (isDark ? 'rgba(255,255,255,0.03)' : '#fff'),
+                                      color: platform.enabled ? platform.color : (isDark ? '#334155' : '#cbd5e1')
+                                    }}
+                                  >
+                                    <svg className="w-7 h-7 sm:w-8 sm:h-8" viewBox="0 0 48 48">
+                                      {(platform.icons || []).map((icon: any, idx: number) => (
+                                        icon.type === 'path' ? (
+                                          <path key={idx} d={icon.d} fill={icon.fill === 'currentColor' ? 'currentColor' : icon.fill} />
+                                        ) : (
+                                          <polygon key={idx} points={icon.points} fill={icon.fill === 'currentColor' ? 'currentColor' : icon.fill} />
+                                        )
+                                      ))}
+                                    </svg>
+                                  </div>
+                                  <div className="flex flex-col overflow-hidden min-w-0">
+                                    <h3 className={`font-black text-lg sm:text-xl truncate transition-colors ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{platform.name}</h3>
+                                    <p className={`text-[10px] sm:text-xs font-medium opacity-60 truncate ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{platform.description}</p>
+                                  </div>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer scale-100 sm:scale-110 shrink-0 ml-2">
+                                  <input type="checkbox" className="sr-only peer" checked={platform.enabled} onChange={() => togglePlatform(category.id, platform.id)} />
+                                  <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all shadow-md ${isDark ? 'bg-slate-800 after:border-slate-300 peer-checked:bg-blue-600' : 'bg-slate-200 after:border-slate-100 peer-checked:bg-blue-500'}`}></div>
+                                </label>
+                              </div>
+
+                              {/* Nested Features */}
+                              {platform.features && platform.features.length > 0 && platform.enabled && (
+                                <div className={`px-4 pb-4 sm:px-6 sm:pb-6 space-y-2`}>
+                                  <div className={`h-px w-full mb-4 ${isDark ? 'bg-white/5' : 'bg-slate-200/50'}`} />
+                                  {platform.features.filter((f: any) => f.id !== "spotify_privacy").map((feature: any) => (
+                                    <div key={feature.id} className={`flex items-center justify-between p-3 sm:p-4 rounded-[1.5rem] transition-all duration-300 ${isDark ? 'bg-white/[0.03] hover:bg-white/5' : 'bg-white/50 hover:bg-white shadow-sm'}`}>
+                                      <div className="flex items-center gap-3 overflow-hidden pr-2">
+                                        {feature.icons && (
+                                          <div 
+                                            className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center"
+                                            style={{ color: feature.enabled ? platform.color : (isDark ? '#334155' : '#cbd5e1') }}
+                                          >
+                                            <svg className="w-5 h-5" viewBox="0 0 48 48">
+                                              {(feature.icons || []).map((icon: any, idx: number) => (
+                                                icon.type === 'path' ? (
+                                                  <path key={idx} d={icon.d} fill={icon.fill === 'currentColor' ? 'currentColor' : icon.fill} />
+                                                ) : (
+                                                  <polygon key={idx} points={icon.points} fill={icon.fill === 'currentColor' ? 'currentColor' : icon.fill} />
+                                                )
+                                              ))}
+                                            </svg>
+                                          </div>
+                                        )}
+                                        <div>
+                                          <h4 className={`text-[10px] sm:text-xs font-black tracking-tight transition-colors ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>{feature.name}</h4>
+                                          <p className={`text-[9px] sm:text-[10px] font-medium opacity-50 truncate ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{feature.description}</p>
+                                        </div>
+                                      </div>
+                                      <label className="relative inline-flex items-center cursor-pointer scale-90 shrink-0">
+                                        <input type="checkbox" className="sr-only peer" checked={feature.enabled} onChange={() => toggleFeature(category.id, platform.id, feature.id)} />
+                                        <div className={`w-9 h-5 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all shadow-sm ${isDark ? 'bg-slate-800 after:border-slate-300 peer-checked:bg-blue-600' : 'bg-slate-200 after:border-slate-100 peer-checked:bg-blue-500'}`}></div>
+                                      </label>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -334,16 +486,18 @@ function App() {
                   Privacy & Security
                 </h2>
                 <div className="space-y-6">
-                  <div className={`flex items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border transition-colors ${isDark ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="overflow-hidden pr-2">
-                      <h3 className={`font-black text-sm sm:text-base tracking-tight truncate transition-colors ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>Privacy Mode</h3>
-                      <p className={`text-[10px] sm:text-xs font-medium mt-1 opacity-60 leading-relaxed ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Hides specific video titles and timestamps from your Discord status.</p>
+
+                    <div className={`flex items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border transition-colors ${isDark ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="overflow-hidden pr-2">
+                        <h3 className={`font-black text-sm sm:text-base tracking-tight truncate transition-colors ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>Privacy Mode</h3>
+                        <p className={`text-[10px] sm:text-xs font-medium mt-1 opacity-60 leading-relaxed ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Hides specific video titles and timestamps from your Discord status.</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer scale-110 shrink-0">
+                        <input type="checkbox" className="sr-only peer" checked={privacyMode} onChange={() => setPrivacyMode(!privacyMode)} />
+                        <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all shadow-md ${isDark ? 'bg-slate-800 after:border-slate-300 peer-checked:bg-blue-600' : 'bg-slate-200 after:border-slate-100 peer-checked:bg-blue-500'}`}></div>
+                      </label>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer scale-110 shrink-0">
-                      <input type="checkbox" className="sr-only peer" checked={privacyMode} onChange={() => setPrivacyMode(!privacyMode)} />
-                      <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all shadow-md ${isDark ? 'bg-slate-800 after:border-slate-300 peer-checked:bg-blue-600' : 'bg-slate-200 after:border-slate-100 peer-checked:bg-blue-500'}`}></div>
-                    </label>
-                  </div>
+
                 </div>
               </div>
 
@@ -373,18 +527,10 @@ function App() {
                 
                 <button 
                   onClick={handleInstallExtension}
-                  disabled={installing}
-                  className={`relative overflow-hidden w-full sm:w-auto px-8 py-4 font-black text-[10px] sm:text-xs tracking-[0.2em] uppercase rounded-xl transition-all active:scale-95 disabled:opacity-50 ${isDark ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-[0_0_40px_rgba(37,99,235,0.4)]' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'}`}
+                  className={`relative overflow-hidden w-full sm:w-auto px-8 py-4 font-black text-[10px] sm:text-xs tracking-[0.2em] uppercase rounded-xl transition-all active:scale-95 ${isDark ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-[0_0_40px_rgba(37,99,235,0.4)]' : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl'}`}
                 >
-                  {installing ? 'INSTALLING...' : 'INSTALL EXTENSION'}
+                  INSTALL EXTENSION
                 </button>
-                
-                {installStatus && (
-                  <div className={`mt-6 sm:mt-8 p-5 sm:p-6 rounded-2xl flex items-center gap-4 text-xs sm:text-sm font-bold animate-in fade-in zoom-in-95 ${installStatus.isError ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}`}>
-                    {installStatus.isError ? <AlertCircle size={20} className="shrink-0" /> : <CheckCircle2 size={20} className="shrink-0" />}
-                    <span className="leading-relaxed break-all">{installStatus.msg}</span>
-                  </div>
-                )}
               </div>
               
               <div className={`rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-10 border shadow-2xl transition-all duration-500 ${isDark ? 'bg-white/5 border-white/10 shadow-black/40' : 'bg-white border-slate-200 shadow-slate-200/50'}`}>
@@ -407,6 +553,25 @@ function App() {
                         <input type="checkbox" className="sr-only peer" checked={autostart} onChange={handleToggleAutostart} />
                         <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all shadow-md ${isDark ? 'bg-slate-800 after:border-slate-300 peer-checked:bg-blue-600' : 'bg-slate-200 after:border-slate-100 peer-checked:bg-blue-500'}`}></div>
                       </label>
+                    </div>
+
+                    <div className={`flex items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border transition-colors ${isDark ? 'bg-black/20 border-white/5' : 'bg-slate-50 border-slate-200'}`}>
+                       <div className="overflow-hidden pr-2">
+                         <h3 className={`font-black text-sm sm:text-base tracking-tight truncate transition-colors ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>Minimize to Tray</h3>
+                         <p className={`text-[10px] sm:text-xs font-medium mt-1 opacity-60 truncate ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>Keep app running in tray when closed.</p>
+                       </div>
+                       <label className="relative inline-flex items-center cursor-pointer scale-110 shrink-0">
+                        <input type="checkbox" className="sr-only peer" checked={minimizeToTray} onChange={() => setMinimizeToTray(!minimizeToTray)} />
+                        <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all shadow-md ${isDark ? 'bg-slate-800 after:border-slate-300 peer-checked:bg-blue-600' : 'bg-slate-200 after:border-slate-100 peer-checked:bg-blue-500'}`}></div>
+                      </label>
+                    </div>
+
+                    <div className={`flex items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-dashed border-blue-500/30 ${isDark ? 'bg-blue-500/5' : 'bg-blue-50'}`}>
+                       <div className="overflow-hidden pr-2">
+                         <h3 className={`font-black text-sm sm:text-base tracking-tight truncate transition-colors ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Global Hotkey</h3>
+                         <p className={`text-[10px] sm:text-xs font-medium mt-1 opacity-60 truncate ${isDark ? 'text-blue-500/70' : 'text-blue-500'}`}>Press Alt+Z anywhere to toggle dashboard.</p>
+                       </div>
+                       <div className={`shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-black border ${isDark ? 'bg-white/10 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>Alt + Z</div>
                     </div>
                   </div>
               </div>
@@ -444,6 +609,11 @@ function App() {
                             {updateStatus === 'checking' ? 'CHECKING...' : 'CHECK NOW'}
                           </button>
                        )}
+                    </div>
+
+                    <div className="pt-4 border-t border-white/5 flex items-center justify-between px-2">
+                      <span className={`text-[10px] font-black tracking-widest uppercase opacity-40 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Current Version</span>
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-md ${isDark ? 'bg-white/10 text-white' : 'bg-slate-200 text-slate-800'}`}>v{appVersion}</span>
                     </div>
                   </div>
               </div>

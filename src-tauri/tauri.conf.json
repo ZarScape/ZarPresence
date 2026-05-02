@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "ZarPresence",
-    "version": "1.0.2"
+    "version": "1.0.3"
   },
   "tauri": {
     "allowlist": {
@@ -21,6 +21,9 @@
       },
       "notification": {
         "all": true
+      },
+      "globalShortcut": {
+        "all": true
       }
     },
     "systemTray": {
@@ -30,6 +33,7 @@
       "active": true,
       "targets": "all",
       "identifier": "com.zarpresence.app",
+      "publisher": "ZarScape",
       "icon": [
         "../src/extension/assets/logo-transparent.png",
         "../src/extension/assets/logo.png",

@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2026-05-02
+### Added
+- Added Spotify support with detailed track, playlist, and profile tracking.
+- Transitioned to a fully Dynamic Configuration-driven architecture (`platforms/` directory).
+- Each platform now has its own dedicated JSON configuration file for better scalability.
+- Implemented robust multi-tab tracking in the browser extension.
+- Added background polling to keep Discord RPC live even when tabs are not focused.
+- RPC now correctly clears immediately when the source platform tab is closed.
+- Automatic fallback to "Playing" background tabs when the active tab is not a platform.
+
+### Fixed
+- Fixed issue where RPC would get "stuck" after closing a platform tab.
+- Resolved TypeScript errors in extension content scripts.
+
 ## [1.0.2] - 2026-04-30
 ### Added
 - **Dynamic Update System**: High-performance update checking via updates.json.

@@ -7,7 +7,8 @@ export default defineConfig({
       input: {
         background: resolve(__dirname, 'src/extension/background.ts'),
         youtube: resolve(__dirname, 'src/extension/youtube.ts'),
-        crunchyroll: resolve(__dirname, 'src/extension/crunchyroll.ts')
+        crunchyroll: resolve(__dirname, 'src/extension/crunchyroll.ts'),
+        spotify: resolve(__dirname, 'src/extension/spotify.ts')
       },
       output: {
         entryFileNames: '[name].js',

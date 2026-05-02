@@ -4,6 +4,7 @@
 mod discord;
 mod ws;
 mod install;
+mod config;
 
 use std::sync::{Arc, Mutex};
 use discord::DiscordState;
@@ -44,10 +45,14 @@ fn quit_app() {
 #[tauri::command]
 fn reconnect_rpc(app_handle: tauri::AppHandle) -> Result<bool, String> {
     let discord_state = app_handle.state::<Arc<Mutex<DiscordState>>>();
-    let mut state = discord_state.lock().unwrap();
+    let app_id = {
+        let state = discord_state.lock().unwrap();
+        state.current_app_id.clone().unwrap_or_else(|| "1497547763028856945".to_string())
+    };
     
+    let mut state = discord_state.lock().unwrap();
     state.disconnect();
-    match state.connect("1497547763028856945") {
+    match state.connect(&app_id) {
         Ok(_) => {
             let _ = app_handle.emit_all("discord-status", true);
             Ok(true)
@@ -66,6 +71,7 @@ fn set_privacy_mode(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), S
     state.privacy_mode = enabled;
     Ok(())
 }
+
 
 #[tauri::command]
 fn is_autostart_enabled() -> bool {
@@ -207,7 +213,9 @@ async fn install_update() -> Result<(), String> {
 }
 
 fn main() {
-    let discord_state = Arc::new(Mutex::new(DiscordState::new()));
+    // Load platforms config
+    let config = config::load_config(std::path::PathBuf::from("../src")).expect("Failed to load platforms.json");
+    let discord_state = Arc::new(Mutex::new(DiscordState::new(config.clone())));
     let ws_discord_state = discord_state.clone();
 
     // Start WebSocket server in background
@@ -233,6 +241,16 @@ fn main() {
         }))
         .manage(discord_state.clone())
         .system_tray(system_tray)
+        .on_window_event(|event| match event.event() {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                let window = event.window();
+                // We'll check the setting from the frontend soon, 
+                // but for now we always hide if it's the main window
+                window.hide().unwrap();
+                api.prevent_close();
+            }
+            _ => {}
+        })
         .on_system_tray_event(|app, event| {
             let handle_show = || {
                 if let Some(window) = app.get_window("main") {
@@ -256,7 +274,8 @@ fn main() {
                     // Initial check for Discord
                     let discord_state = app.state::<Arc<Mutex<DiscordState>>>();
                     let mut state = discord_state.lock().unwrap();
-                    if let Err(_) = state.connect("1497547763028856945") {
+                    let app_id = state.current_app_id.clone().unwrap_or_else(|| "1497547763028856945".to_string());
+                    if let Err(_) = state.connect(&app_id) {
                         window.emit("discord-not-found", ()).unwrap();
                         window.emit("discord-status", false).unwrap();
                     } else {
@@ -281,6 +300,20 @@ fn main() {
                 _ => {}
             }
         })        .setup(|app| {
+            // Register Alt+Z global shortcut
+            use tauri::GlobalShortcutManager;
+            let app_handle = app.handle();
+            let mut shortcuts = app.global_shortcut_manager();
+            let _ = shortcuts.register("Alt+Z", move || {
+                let window = app_handle.get_window("main").unwrap();
+                if window.is_visible().unwrap() {
+                    let _ = window.hide();
+                } else {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            });
+
             // Periodically check Discord status and emit to frontend
             let app_handle = app.handle();
             tauri::async_runtime::spawn(async move {
@@ -300,7 +333,8 @@ fn main() {
             if let Some(window) = app.get_window("main") {
                 let discord_state = app.state::<Arc<Mutex<DiscordState>>>();
                 let mut state = discord_state.lock().unwrap();
-                if let Err(_) = state.connect("1497547763028856945") {
+                let app_id = state.current_app_id.clone().unwrap_or_else(|| "1497547763028856945".to_string());
+                if let Err(_) = state.connect(&app_id) {
                     window.emit("discord-not-found", ()).unwrap();
                     window.emit("discord-status", false).unwrap();
                 } else {

@@ -1,13 +1,18 @@
 {
-  "version": "1.0.2",
-  "notes": "Transitioned to the high-performance Dynamic Update System and optimized project assets.",
-  "pub_date": "2026-04-30T17:51:28Z",
+  "version": "1.0.3",
+  "notes": "Added Spotify & Introduced Dynamic Configuration architecture and robust background tab tracking.",
+  "pub_date": "2026-05-02T14:30:00Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://github.com/ZarScape/ZarPresence/releases/download/1.0.2/ZarPresence_1.0.2_x64-setup-exe.zip"
+      "url": "https://github.com/ZarScape/ZarPresence/releases/download/1.0.3/ZarPresence_1.0.3_x64-setup-exe.zip"
     }
   },
   "history": [
+    {
+      "version": "1.0.3",
+      "date": "2026-05-02",
+      "notes": "Dynamic configuration architecture and multi-tab tracking."
+    },
     {
       "version": "1.0.2",
       "date": "2026-04-30",

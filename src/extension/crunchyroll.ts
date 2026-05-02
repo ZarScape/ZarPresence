@@ -1,8 +1,11 @@
-/// <reference types="chrome"/>
+import config from '../config/platforms/crunchyroll.json';
+
 // Crunchyroll Content Script for ZarPresence
 let lastUrl = location.href;
 let updateInterval: number | null = null;
 let browsingStartTime = Math.floor(Date.now() / 1000);
+
+const templates = config.display_templates;
 
 function parseDurationToSeconds(duration: string): number {
     // Duration format: PT23M33.718000000000075S
@@ -48,14 +51,14 @@ function scrapeCrunchyrollData() {
 
         return {
             ...baseData,
-            details: "Viewing Series",
+            details: templates.series || "Viewing Series",
             state: seriesName,
             is_browsing: true,
             timestamp_start: browsingStartTime,
             large_image_key: imageUrl,
             large_text: seriesName,
-            small_image_key: "crunchyroll-icon",
-            small_text: "Crunchyroll"
+            small_image_key: ((templates as any).icons?.series) || "crunchyroll-icon",
+            small_text: ((templates as any).icons?.series_text) || "Viewing Series"
         };
     }
 
@@ -136,18 +139,20 @@ function scrapeCrunchyrollData() {
             timestamp_end,
             large_image_key: imageUrl,
             large_text: seasonText || episodeName,
-            small_image_key: "crunchyroll-icon",
-            small_text: "Crunchyroll"
+            small_image_key: ((templates as any).icons?.playing) || "play",
+            small_text: ((templates as any).icons?.playing_text) || "Watching"
         };
     }
 
     // Home / Exploring
     return {
         ...baseData,
-        details: "Browsing Anime",
+        details: templates.home || "Browsing Anime",
         state: "",
         is_browsing: true,
-        timestamp_start: browsingStartTime
+        timestamp_start: browsingStartTime,
+        small_image_key: ((templates as any).icons?.browsing) || "crunchyroll-icon",
+        small_text: ((templates as any).icons?.browsing_text) || "Browsing Anime"
     };
 }
 
