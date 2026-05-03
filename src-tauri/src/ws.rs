@@ -18,7 +18,8 @@ pub struct ActivityPayload {
     pub state: String,
     pub timestamp_start: Option<i64>,
     pub timestamp_end: Option<i64>,
-    pub is_paused: bool,
+    #[serde(rename = "is_paused")]
+    pub _is_paused: bool,
     pub is_shorts: Option<bool>,
     pub is_browsing: Option<bool>,
     pub large_image_key: Option<String>,

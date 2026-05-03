@@ -111,9 +111,21 @@ impl DiscordState {
                         activity = activity.state("Privacy Active");
                     }
                 } else {
-                    activity = activity.details(&payload.details);
-                    if !payload.state.is_empty() {
-                        activity = activity.state(&payload.state);
+                    if is_spotify {
+                        // Universal Spotify Layout: Subject (Title/Playlist) at top, Context (Artist/Action) below.
+                        // Extension sends: large_text=Subject, details=Context, state=Optional templated context
+                        let subject = payload.large_text.as_deref().unwrap_or(&payload.details);
+                        let context = if !payload.state.is_empty() { &payload.state } else { &payload.details };
+                        
+                        activity = activity.details(subject);
+                        if context != subject {
+                            activity = activity.state(context);
+                        }
+                    } else {
+                        activity = activity.details(&payload.details);
+                        if !payload.state.is_empty() {
+                            activity = activity.state(&payload.state);
+                        }
                     }
                 }
 
@@ -151,13 +163,20 @@ impl DiscordState {
                     let l_text = feature.as_ref().map(|f| f.name.as_str()).unwrap_or(p.name.as_str());
                     let l_text_final = payload.large_text.as_deref().unwrap_or(l_text);
                     
-                    assets = assets.large_image(l_image).large_text(l_text_final);
+                    // To remove the "last line" (3rd line) in Spotify presence, 
+                    // we don't set large_text for Spotify to prevent duplication.
+                    if !is_spotify {
+                        assets = assets.large_image(l_image).large_text(l_text_final);
+                    } else {
+                        assets = assets.large_image(l_image);
+                    }
 
                     if !payload.is_browsing.unwrap_or(false) {
                         let s_image = payload.small_image_key.as_deref().unwrap_or(&p.small_image_key);
                         let s_text = payload.small_text.as_deref().unwrap_or(
-                            if payload.is_paused { "Paused" } else { "Playing" }
+                            if is_spotify { "Spotify" } else { &p.name }
                         );
+                        
                         assets = assets.small_image(s_image).small_text(s_text);
                     }
                 }
