@@ -4,14 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [1.0.4] - 2026-05-03
 ### Added
-- **Active Memory Reclaiming**: Dashboard window is now fully destroyed on close/hide, dropping WebView2 RAM usage to lowest when in the background.
-- **Adaptive Background Polling**: Reduced background CPU usage by decreasing status polling frequency when the dashboard is hidden.
-- **Production Asset Fix**: Corrected resource path resolution so platform configurations load correctly in built/installed versions.
+- **Universal Spotify Layout**: Song titles and Playlists are now pinned to the top line for a better look.
+- **Dynamic JSON Customization**: You can now edit presence layouts and icons via JSON without touching code.
+- **Clean Presence Mode**: Removed redundant 3rd lines in Spotify presence for a cleaner look.
+- **Active Memory Reclaiming**: Dashboard window is now fully destroyed on close, dropping WebView2 RAM usage to lowest when in background.
+- **Adaptive Background Polling**: Reduced background CPU usage by decreasing status polling frequency when hidden.
 
 ### Fixed
 - Fixed recursive `CloseRequested` handler that was preventing WebView2 processes from being destroyed.
-- Optimized `Alt+Z` global shortcut to use the window destruction/recreation pattern for maximum RAM efficiency.
-- Replaced `hide()` with `close()` in the frontend title bar to ensure immediate memory release.
+- Optimized `Alt+Z` global shortcut to use the window destruction/recreation pattern.
+- Replaced `hide()` with `close()` in the frontend title bar for immediate memory release.
+- Silenced Rust `is_paused` and `api` variable warnings.
 
 ## [1.0.3] - 2026-05-02
 ### Added
