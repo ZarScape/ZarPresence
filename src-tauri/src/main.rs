@@ -43,6 +43,13 @@ fn quit_app() {
 }
 
 #[tauri::command]
+fn close_window(app_handle: tauri::AppHandle) {
+    if let Some(window) = app_handle.get_window("main") {
+        let _ = window.close();
+    }
+}
+
+#[tauri::command]
 fn reconnect_rpc(app_handle: tauri::AppHandle) -> Result<bool, String> {
     let discord_state = app_handle.state::<Arc<Mutex<DiscordState>>>();
     let app_id = {
@@ -213,9 +220,8 @@ async fn install_update() -> Result<(), String> {
 }
 
 fn main() {
-    // Load platforms config
-    let config = config::load_config(std::path::PathBuf::from("../src")).expect("Failed to load platforms.json");
-    let discord_state = Arc::new(Mutex::new(DiscordState::new(config.clone())));
+    // Start with default config, will be loaded properly in .setup()
+    let discord_state = Arc::new(Mutex::new(DiscordState::new(config::Config::default())));
     let ws_discord_state = discord_state.clone();
 
     // Start WebSocket server in background
@@ -235,29 +241,36 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(window) = app.get_window("main") {
+                // Window exists, just focus it
                 let _ = window.show();
                 let _ = window.set_focus();
+            } else {
+                // Window was destroyed (minimized to tray) — rebuild it
+                if let Ok(window) = tauri::WindowBuilder::new(
+                    app,
+                    "main",
+                    tauri::WindowUrl::App("index.html".into())
+                )
+                .title("ZarPresence")
+                .inner_size(1000.0, 700.0)
+                .min_inner_size(800.0, 500.0)
+                .decorations(false)
+                .transparent(true)
+                .build() {
+                    let _ = window.set_focus();
+                }
             }
         }))
         .manage(discord_state.clone())
         .system_tray(system_tray)
-        .on_window_event(|event| match event.event() {
-            tauri::WindowEvent::CloseRequested { api, .. } => {
-                let window = event.window();
-                // We'll check the setting from the frontend soon, 
-                // but for now we always hide if it's the main window
-                window.hide().unwrap();
-                api.prevent_close();
-            }
-            _ => {}
-        })
+        .on_window_event(|_event| {})
         .on_system_tray_event(|app, event| {
             let handle_show = || {
                 if let Some(window) = app.get_window("main") {
                     window.show().unwrap();
                     window.set_focus().unwrap();
                 } else {
-                    // Rebuild window from scratch to save RAM when hidden
+                    
                     let window = tauri::WindowBuilder::new(
                         app,
                         "main",
@@ -300,17 +313,29 @@ fn main() {
                 _ => {}
             }
         })        .setup(|app| {
-            // Register Alt+Z global shortcut
+            // Register Alt+Z global shortcut to toggle dashboard
             use tauri::GlobalShortcutManager;
             let app_handle = app.handle();
             let mut shortcuts = app.global_shortcut_manager();
             let _ = shortcuts.register("Alt+Z", move || {
-                let window = app_handle.get_window("main").unwrap();
-                if window.is_visible().unwrap() {
-                    let _ = window.hide();
+                if let Some(window) = app_handle.get_window("main") {
+                    // Window exists — close it to free RAM
+                    let _ = window.close();
                 } else {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    // Window was destroyed — rebuild it
+                    if let Ok(window) = tauri::WindowBuilder::new(
+                        &app_handle,
+                        "main",
+                        tauri::WindowUrl::App("index.html".into())
+                    )
+                    .title("ZarPresence")
+                    .inner_size(1000.0, 700.0)
+                    .min_inner_size(800.0, 500.0)
+                    .decorations(false)
+                    .transparent(true)
+                    .build() {
+                        let _ = window.set_focus();
+                    }
                 }
             });
 
@@ -318,16 +343,38 @@ fn main() {
             let app_handle = app.handle();
             tauri::async_runtime::spawn(async move {
                 loop {
-                    let is_connected = {
-                        let discord_state = app_handle.state::<Arc<Mutex<DiscordState>>>();
-                        let state = discord_state.lock().unwrap();
-                        state.client.is_some()
-                    };
+                    let window_exists = app_handle.get_window("main").is_some();
                     
-                    let _ = app_handle.emit_all("discord-status", is_connected);
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    if window_exists {
+                        let is_connected = {
+                            let discord_state = app_handle.state::<Arc<Mutex<DiscordState>>>();
+                            let state = discord_state.lock().unwrap();
+                            state.client.is_some()
+                        };
+                        let _ = app_handle.emit_all("discord-status", is_connected);
+                    }
+
+                    // Only check every 30s if hidden, 5s if dashboard is open
+                    let sleep_time = if window_exists { 5 } else { 30 };
+                    tokio::time::sleep(std::time::Duration::from_secs(sleep_time)).await;
                 }
             });
+
+            // Load platforms config from resources
+            let resource_path = app.path_resolver()
+                .resolve_resource("../src")
+                .expect("Failed to resolve resource path");
+            
+            match config::load_config(resource_path) {
+                Ok(loaded_config) => {
+                    let discord_state = app.state::<Arc<Mutex<DiscordState>>>();
+                    let mut state = discord_state.lock().unwrap();
+                    state.config = loaded_config;
+                }
+                Err(e) => {
+                    eprintln!("Failed to load configuration: {}", e);
+                }
+            }
 
             // Initial check if Discord is running
             if let Some(window) = app.get_window("main") {
@@ -348,6 +395,7 @@ fn main() {
             install::force_install_extension,
             change_theme,
             quit_app,
+            close_window,
             reconnect_rpc,
             set_privacy_mode,
             is_autostart_enabled,

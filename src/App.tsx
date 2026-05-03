@@ -309,13 +309,10 @@ function App() {
             <Square size={13} />
           </button>
           <button 
-            onClick={() => {
-              if (minimizeToTray) {
-                appWindow.hide();
-              } else {
-                appWindow.close();
-              }
-            }} 
+            onClick={async () => {
+              // Await Rust-side close to guarantee the window is destroyed.
+              await invoke('close_window');
+            }}
             className="p-1.5 hover:bg-red-500 rounded-md transition-colors text-slate-400 hover:text-white group"
           >
             <X size={15} className="group-hover:text-white" />

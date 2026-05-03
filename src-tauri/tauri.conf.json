@@ -7,7 +7,7 @@
   },
   "package": {
     "productName": "ZarPresence",
-    "version": "1.0.3"
+    "version": "1.0.4"
   },
   "tauri": {
     "allowlist": {
@@ -38,6 +38,9 @@
         "../src/extension/assets/logo-transparent.png",
         "../src/extension/assets/logo.png",
         "../src/extension/assets/logo-icon.ico"
+      ],
+      "resources": [
+        "../src/config/platforms/*.json"
       ],
       "windows": {
         "nsis": {

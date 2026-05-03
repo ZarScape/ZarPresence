@@ -1,6 +1,6 @@
 [package]
 name = "zarpresence"
-version = "1.0.3"
+version = "1.0.4"
 authors = ["ZarScape"]
 edition = "2021"
 
@@ -8,7 +8,7 @@ edition = "2021"
 discord-rich-presence = "1.1.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-tauri = { version = "1.6", features = [ "global-shortcut-all", "notification-all", "window-all", "system-tray", "shell-open", "custom-protocol"] }
+tauri = { version = "1.6", features = [ "window-all", "notification-all", "global-shortcut-all", "global-shortcut", "notification", "system-tray", "shell-open", "custom-protocol"] }
 tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread", "net"] }
 tokio-tungstenite = "0.21"
 futures-util = "0.3"
@@ -25,3 +25,10 @@ tauri-build = { version = "1.5", features = [] }
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = [ "tauri/custom-protocol" ]
+
+[profile.release]
+panic = "abort" # Reduce binary size by removing panic unwinding
+codegen-units = 1 # Better optimizations
+lto = true # Enable Link Time Optimization
+opt-level = "z" # Optimize for size
+strip = true # Automatically strip symbols from the binary

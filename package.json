@@ -1,7 +1,7 @@
 {
   "name": "zarpresence",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "author": "ZarScape",
   "description": "Modern Discord Rich Presence, redefined.",
   "type": "module",

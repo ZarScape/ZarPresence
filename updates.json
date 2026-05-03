@@ -1,17 +1,22 @@
 {
-  "version": "1.0.3",
-  "notes": "Added Spotify & Introduced Dynamic Configuration architecture and robust background tab tracking.",
-  "pub_date": "2026-05-02T14:30:00Z",
+  "version": "1.0.4",
+  "notes": "Major RAM optimization (Active Memory Reclaiming) and CPU efficiency improvements.",
+  "pub_date": "2026-05-03T15:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://github.com/ZarScape/ZarPresence/releases/download/1.0.3/ZarPresence_1.0.3_x64-setup-exe.zip"
+      "url": "https://github.com/ZarScape/ZarPresence/releases/download/1.0.4/ZarPresence_1.0.4_x64-setup-exe.zip"
     }
   },
   "history": [
     {
+      "version": "1.0.4",
+      "date": "2026-05-03",
+      "notes": "RAM optimization via Window Destruction and CPU efficiency improvements."
+    },
+    {
       "version": "1.0.3",
       "date": "2026-05-02",
-      "notes": "Dynamic configuration architecture and multi-tab tracking."
+      "notes": "Added Spotify support and transitioned to Dynamic Configuration architecture."
     },
     {
       "version": "1.0.2",
